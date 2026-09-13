@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 
 from database import get_db
 from models import User, Identity, PasswordResetToken
@@ -17,12 +17,6 @@ from schemas import (
 from auth_utils import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
-
 
 @router.post("/register")
 def register(
@@ -61,7 +55,10 @@ def register(
         )
 
     # Hash password
-    hashed_password = pwd_context.hash(data.password)
+    hashed_password = bcrypt.hashpw(
+        data.password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
 
     # Create user
     new_user = User(
@@ -113,9 +110,9 @@ def login(
             detail="Invalid username or password."
         )
 
-    if not pwd_context.verify(
-        data.password,
-        user.password_hash
+    if not bcrypt.checkpw(
+        data.password.encode("utf-8"),
+        user.password_hash.encode("utf-8")
     ):
         raise HTTPException(
             status_code=401,
@@ -205,9 +202,10 @@ def reset_password(
             detail="User account not found."
         )
 
-    user.password_hash = pwd_context.hash(
-        data.new_password
-    )
+    user.password_hash = bcrypt.hashpw(
+        data.new_password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
 
     reset_token.used = True
 
